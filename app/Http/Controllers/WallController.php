@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use App\Services\ModerationService;
 
 class WallController extends Controller
 {
@@ -280,6 +281,16 @@ class WallController extends Controller
 
         // Sanitize comment body
         $body = strip_tags($validated['body']);
+
+        // AI moderation check
+        $moderation = app(ModerationService::class);
+        if (!$moderation->isSafe($body)) {
+            $categories = implode(', ', $moderation->flaggedCategories($body));
+            if ($request->wantsJson()) {
+                return response()->json(['error' => "Komentář porušuje pravidla komunity ($categories)."], 422);
+            }
+            return back()->withErrors(['body' => "Komentář porušuje pravidla komunity ($categories)."]);
+        }
 
         $post->comments()->create([
             'user_id' => $user->id,

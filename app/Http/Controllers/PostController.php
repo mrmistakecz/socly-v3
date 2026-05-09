@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Intervention\Image\Laravel\Facades\Image;
+use App\Services\ModerationService;
 
 class PostController extends Controller
 {
@@ -68,6 +69,18 @@ class PostController extends Controller
 
         // Sanitize caption (strip HTML tags)
         $caption = $validated['caption'] ? strip_tags($validated['caption']) : null;
+
+        // AI moderation check
+        if ($caption) {
+            $moderation = app(ModerationService::class);
+            if (!$moderation->isSafe($caption)) {
+                $categories = implode(', ', $moderation->flaggedCategories($caption));
+                if ($request->wantsJson()) {
+                    return response()->json(['error' => "Obsah porušuje pravidla komunity ($categories)."], 422);
+                }
+                return back()->withErrors(['caption' => "Obsah porušuje pravidla komunity ($categories)."]);
+            }
+        }
 
         $post = Post::create([
             'user_id'   => Auth::id(),

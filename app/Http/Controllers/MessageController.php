@@ -78,9 +78,13 @@ class MessageController extends Controller
         // Generate secure random filename
         $filename = \Illuminate\Support\Str::random(40) . '.' . $extension;
         
-        // Store file in public storage
-        $path = $file->storeAs('messages', $filename, 'public');
-        $url = asset('storage/' . $path);
+        // Store file on configured disk (public or S3/R2)
+        $disk = config('filesystems.default');
+        Storage::disk($disk)->put('messages/' . $filename, file_get_contents($file->getRealPath()));
+        $path = 'messages/' . $filename;
+        $url = $disk === 'public'
+            ? asset('storage/' . $path)
+            : Storage::disk($disk)->url($path);
 
         // Sanitize message body if present
         $body = isset($validated['body']) ? strip_tags($validated['body']) : '';

@@ -18,6 +18,7 @@ use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\BlockController;
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\LiveStreamController;
 use Inertia\Inertia;
 
 // Main feed (requires auth)
@@ -129,6 +130,10 @@ Route::middleware('auth')->group(function () {
 
     // Account deletion
     Route::delete('/account', [AccountController::class, 'destroy'])->middleware('throttle:3,1')->name('account.destroy');
+
+    // LiveKit streaming
+    Route::post('/stream/token', [LiveStreamController::class, 'token'])->name('stream.token');
+    Route::get('/stream/rooms', [LiveStreamController::class, 'rooms'])->name('stream.rooms');
 
     // Onboarding
     Route::post('/onboarding/complete', function () {

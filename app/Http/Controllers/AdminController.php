@@ -89,16 +89,31 @@ class AdminController extends Controller
             return back()->with('error', 'Nelze smazat admina.');
         }
 
-        // Delete media files
+        // Delete media files from correct disk (public or S3/R2)
+        $disk = config('filesystems.default');
+        $deleteFile = function (string $url) use ($disk) {
+            if (!$url) return;
+            try {
+                if (str_starts_with($url, '/storage/')) {
+                    Storage::disk('public')->delete(str_replace('/storage/', '', $url));
+                } elseif (str_starts_with($url, 'http')) {
+                    $key = parse_url($url, PHP_URL_PATH);
+                    if ($key) Storage::disk($disk)->delete(ltrim($key, '/'));
+                }
+            } catch (\Exception $e) {
+                \Log::warning('Failed to delete file: ' . $e->getMessage());
+            }
+        };
+
         if ($user->avatar && !str_starts_with($user->avatar, '/images/')) {
-            Storage::disk('public')->delete(str_replace('/storage/', '', $user->avatar));
+            $deleteFile($user->avatar);
         }
         if ($user->cover_image && !str_starts_with($user->cover_image, '/images/')) {
-            Storage::disk('public')->delete(str_replace('/storage/', '', $user->cover_image));
+            $deleteFile($user->cover_image);
         }
-        $user->posts()->each(function ($post) {
-            if ($post->image) Storage::disk('public')->delete(str_replace('/storage/', '', $post->image));
-            if ($post->thumbnail) Storage::disk('public')->delete(str_replace('/storage/', '', $post->thumbnail));
+        $user->posts()->each(function ($post) use ($deleteFile) {
+            $deleteFile($post->image);
+            $deleteFile($post->thumbnail);
         });
 
         $user->posts()->forceDelete();
