@@ -96,15 +96,68 @@ certbot renew --dry-run
 
 ---
 
-## API klíče k obstarání
+## API klíče k obstarání (vše ZDARMA)
 
-| Služba | K čemu | Env proměnné |
-|--------|--------|--------------|
-| **Resend** | Transakční emaily | `RESEND_KEY` |
-| **Cloudflare R2** | Media storage | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_ENDPOINT` |
-| **Sentry** | Error tracking | `SENTRY_LARAVEL_DSN` |
-| **LiveKit** | Live streaming | `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_URL` |
-| **OpenAI** | AI moderace | `OPENAI_API_KEY` |
+### 1. Resend — transakční emaily (FREE: 3 000 emailů/měsíc)
+1. Jdi na https://resend.com/signup a registruj se (GitHub/Google/email)
+2. Po přihlášení klikni **API Keys** → **Create API Key**
+3. Pojmenuj klíč (např. `socly-production`), scope: **Full access**
+4. Zkopíruj klíč (začíná `re_...`)
+5. Do `.env` na VPS:
+```env
+RESEND_KEY=re_xxxxxxxxxx
+```
+
+### 2. Cloudflare R2 — media storage (FREE: 10 GB, 0 Kč za egress)
+1. Registruj se na https://dash.cloudflare.com/sign-up (není potřeba karta)
+2. V levém menu klikni **R2** → **Object Storage**
+3. Klikni **Create bucket**, pojmenuj `socly-media`, region: **Automatic**
+4. Jdi do **R2** → **Manage R2 API Tokens** → **Create API token**
+5. Název: `socly`, permissions: **Object Read & Write**, bucket: `socly-media`
+6. Zkopíruj **Access Key ID** a **Secret Access Key** (zobrazí se jen jednou!)
+7. Endpoint najdeš v detailu bucketu (formát: `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`)
+8. Do `.env` na VPS:
+```env
+FILESYSTEM_DISK=r2
+R2_ACCESS_KEY_ID=xxxxxxxxxx
+R2_SECRET_ACCESS_KEY=xxxxxxxxxx
+R2_BUCKET=socly-media
+R2_ENDPOINT=https://ACCOUNT_ID.r2.cloudflarestorage.com
+```
+
+### 3. Sentry — error tracking (FREE: 5 000 chyb/měsíc)
+1. Registruj se na https://sentry.io/signup/ (GitHub/Google/email)
+2. Vytvoř organizaci (např. `socly`)
+3. **Create Project** → platforma: **Laravel**, název: `socly-production`
+4. Sentry ti rovnou ukáže DSN (formát: `https://xxx@oXXX.ingest.sentry.io/XXX`)
+5. Nebo: **Settings** → **Projects** → `socly-production` → **Client Keys (DSN)**
+6. Do `.env` na VPS:
+```env
+SENTRY_LARAVEL_DSN=https://xxx@oXXX.ingest.sentry.io/XXX
+```
+
+### 4. LiveKit — live streaming (FREE: 50 GB přenos/měsíc)
+1. Registruj se na https://cloud.livekit.io (GitHub/Google)
+2. Vytvoř projekt (např. `socly`)
+3. Na dashboardu uvidíš **API Key** a **API Secret**
+4. URL projektu je ve formátu `wss://socly-xxxxx.livekit.cloud`
+5. Do `.env` na VPS:
+```env
+LIVEKIT_API_KEY=APIxxxxxxxxxx
+LIVEKIT_API_SECRET=xxxxxxxxxx
+LIVEKIT_URL=wss://socly-xxxxx.livekit.cloud
+```
+
+### 5. OpenAI — AI moderace (FREE: moderation endpoint je zdarma)
+1. Registruj se na https://platform.openai.com/signup (Google/email)
+2. **API Keys** → **Create new secret key**, pojmenuj `socly`
+3. Zkopíruj klíč (začíná `sk-...`)
+4. **Moderation endpoint** (`/v1/moderations`) je **zdarma** a nepočítá se do limitu
+5. Do `.env` na VPS:
+```env
+OPENAI_API_KEY=sk-xxxxxxxxxx
+```
+> Pozn: Registrace vyžaduje ověření telefonním číslem. Moderace je free, ale pokud bys chtěl i generování textu/obrázků, to už je placené.
 
 ---
 
