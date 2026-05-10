@@ -24,6 +24,12 @@ class LoginController extends Controller
         ]);
 
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
+            if (Auth::user()->is_banned) {
+                Auth::logout();
+                return back()->withErrors([
+                    'email' => 'Váš účet byl zablokován. Kontaktujte podporu.',
+                ]);
+            }
             $request->session()->regenerate();
             return redirect()->intended('/');
         }

@@ -12,35 +12,49 @@ use Inertia\Inertia;
 
 class AdminController extends Controller
 {
-    public function dashboard()
+    public function dashboard(Request $request)
     {
+        $search = $request->get('search', '');
+
         $stats = [
             'totalUsers' => User::count(),
             'totalPosts' => Post::count(),
             'totalMessages' => Message::count(),
             'newUsersToday' => User::whereDate('created_at', today())->count(),
             'newPostsToday' => Post::whereDate('created_at', today())->count(),
+            'totalRevenue' => (int) DB::table('transactions')->sum('amount'),
+            'pendingReports' => (int) DB::table('reports')->where('status', 'pending')->count(),
+            'bannedUsers' => (int) User::where('is_banned', true)->count(),
         ];
 
-        $users = User::withCount(['posts', 'followers', 'following'])
-            ->orderByDesc('created_at')
-            ->limit(50)
-            ->get()
-            ->map(fn ($u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-                'username' => $u->username,
-                'email' => $u->email,
-                'avatar' => $u->avatar,
-                'is_verified' => $u->is_verified,
-                'is_vip' => $u->is_vip,
-                'is_creator' => $u->is_creator,
-                'is_admin' => $u->is_admin,
-                'posts_count' => $u->posts_count,
-                'followers_count' => $u->followers_count,
-                'following_count' => $u->following_count,
-                'created_at' => $u->created_at->format('d.m.Y H:i'),
-            ]);
+        $usersQuery = User::withCount(['posts', 'followers', 'following'])
+            ->orderByDesc('created_at');
+
+        if ($search) {
+            $usersQuery->where(function ($q) use ($search) {
+                $q->where('name', 'ilike', "%{$search}%")
+                  ->orWhere('username', 'ilike', "%{$search}%")
+                  ->orWhere('email', 'ilike', "%{$search}%");
+            });
+        }
+
+        $users = $usersQuery->limit(50)->get()->map(fn ($u) => [
+            'id' => $u->id,
+            'name' => $u->name,
+            'username' => $u->username,
+            'email' => $u->email,
+            'avatar' => $u->avatar,
+            'is_verified' => $u->is_verified,
+            'is_vip' => $u->is_vip,
+            'is_creator' => $u->is_creator,
+            'is_admin' => $u->is_admin,
+            'is_banned' => (bool) $u->is_banned,
+            'posts_count' => $u->posts_count,
+            'followers_count' => $u->followers_count,
+            'following_count' => $u->following_count,
+            'created_at' => $u->created_at->format('d.m.Y H:i'),
+            'email_verified' => (bool) $u->email_verified_at,
+        ]);
 
         $posts = Post::with('user')
             ->orderByDesc('created_at')
@@ -58,10 +72,43 @@ class AdminController extends Controller
                 'created_at' => $p->created_at->format('d.m.Y H:i'),
             ]);
 
+        $reports = DB::table('reports')
+            ->join('users as reporter', 'reports.reporter_id', '=', 'reporter.id')
+            ->select([
+                'reports.*',
+                'reporter.name as reporter_name',
+                'reporter.username as reporter_username',
+            ])
+            ->orderByDesc('reports.created_at')
+            ->limit(50)
+            ->get()
+            ->map(function ($r) {
+                $target = null;
+                if ($r->reportable_type === User::class) {
+                    $u = User::find($r->reportable_id);
+                    $target = $u ? ['type' => 'user', 'name' => $u->name, 'username' => $u->username] : null;
+                } elseif ($r->reportable_type === Post::class) {
+                    $p = Post::with('user')->find($r->reportable_id);
+                    $target = $p ? ['type' => 'post', 'name' => $p->user->name, 'caption' => \Str::limit($p->caption, 40)] : null;
+                }
+                return [
+                    'id' => $r->id,
+                    'reason' => $r->reason,
+                    'notes' => $r->notes,
+                    'status' => $r->status,
+                    'reporter_name' => $r->reporter_name,
+                    'reporter_username' => $r->reporter_username,
+                    'target' => $target,
+                    'created_at' => \Carbon\Carbon::parse($r->created_at)->format('d.m.Y H:i'),
+                ];
+            });
+
         return Inertia::render('Admin/Dashboard', [
             'stats' => $stats,
             'users' => $users,
             'posts' => $posts,
+            'reports' => $reports,
+            'search' => $search,
         ]);
     }
 
@@ -126,6 +173,39 @@ class AdminController extends Controller
         $user->forceDelete();
 
         return back()->with('success', 'Uživatel byl smazán.');
+    }
+
+    public function banUser(User $user)
+    {
+        if ($user->is_admin) {
+            return back()->with('error', 'Nelze banovat admina.');
+        }
+
+        $user->is_banned = !$user->is_banned;
+        $user->save();
+
+        $action = $user->is_banned ? 'zabanován' : 'odbanován';
+        return back()->with('success', "Uživatel {$user->name} byl {$action}.");
+    }
+
+    public function resolveReport(int $id)
+    {
+        DB::table('reports')->where('id', $id)->update([
+            'status' => 'resolved',
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('success', 'Report byl vyřešen.');
+    }
+
+    public function dismissReport(int $id)
+    {
+        DB::table('reports')->where('id', $id)->update([
+            'status' => 'dismissed',
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('success', 'Report byl zamítnut.');
     }
 
     public function deletePost(Post $post)

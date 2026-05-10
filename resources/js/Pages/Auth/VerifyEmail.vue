@@ -1,9 +1,10 @@
 <script setup>
-import { useForm, Head } from '@inertiajs/vue3'
+import { useForm, Head, router } from '@inertiajs/vue3'
 import { Mail } from 'lucide-vue-next'
 
 const form = useForm({})
 const resend = () => form.post('/email/resend')
+const logout = () => router.post('/logout')
 </script>
 
 <template>
@@ -42,12 +43,9 @@ const resend = () => form.post('/email/resend')
           {{ form.processing ? 'Odesílám...' : 'Znovu odeslat ověřovací email' }}
         </button>
 
-        <form method="POST" action="/logout">
-          <input type="hidden" name="_token" :value="$page.props.csrf_token" />
-          <button type="submit" class="text-xs text-muted-foreground hover:text-foreground transition">
-            Odhlásit se
-          </button>
-        </form>
+        <button @click="logout" class="text-xs text-muted-foreground hover:text-foreground transition">
+          Odhlásit se
+        </button>
       </div>
     </div>
   </div>

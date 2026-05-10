@@ -38,16 +38,16 @@ Route::middleware('guest')->group(function () {
     Route::post('/reset-password', [ResetPasswordController::class, 'store'])->middleware('throttle:5,1')->name('password.update');
 });
 
-// Email verification routes
+// Email verification routes + logout (no verified middleware needed)
 Route::middleware('auth')->group(function () {
     Route::get('/email/verify', [VerifyEmailController::class, 'show'])->name('verification.notice');
     Route::get('/email/verify/{id}/{hash}', [VerifyEmailController::class, 'verify'])->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
     Route::post('/email/resend', [VerifyEmailController::class, 'resend'])->middleware('throttle:3,1')->name('verification.resend');
+    Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 });
 
-// Protected routes
-Route::middleware('auth')->group(function () {
-    Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
+// Protected routes (verified email required)
+Route::middleware(['auth', 'verified'])->group(function () {
 
     // Profile
     Route::get('/profile', [ProfileController::class, 'me'])->name('profile');
@@ -170,7 +170,10 @@ Route::post('/webhook/nowpayments', [WebhookController::class, 'nowpayments'])->
 Route::middleware(['auth', \App\Http\Middleware\AdminMiddleware::class])->prefix('admin')->group(function () {
     Route::get('/', [App\Http\Controllers\AdminController::class, 'dashboard'])->name('admin.dashboard');
     Route::put('/users/{user}', [App\Http\Controllers\AdminController::class, 'updateUser'])->name('admin.users.update');
+    Route::post('/users/{user}/ban', [App\Http\Controllers\AdminController::class, 'banUser'])->name('admin.users.ban');
     Route::delete('/users/{user}', [App\Http\Controllers\AdminController::class, 'deleteUser'])->name('admin.users.delete');
     Route::delete('/posts/{post}', [App\Http\Controllers\AdminController::class, 'deletePost'])->name('admin.posts.delete');
+    Route::post('/reports/{id}/resolve', [App\Http\Controllers\AdminController::class, 'resolveReport'])->name('admin.reports.resolve');
+    Route::post('/reports/{id}/dismiss', [App\Http\Controllers\AdminController::class, 'dismissReport'])->name('admin.reports.dismiss');
 });
 
