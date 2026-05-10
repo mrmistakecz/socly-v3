@@ -52,7 +52,12 @@ const prevStep = () => {
 
 const submit = () => {
   form.post('/register', {
-    onFinish: () => form.reset('password', 'password_confirmation'),
+    onError: (errors) => {
+      if (errors.name || errors.username || errors.email) {
+        step.value = 1
+      }
+      form.reset('password', 'password_confirmation')
+    },
   })
 }
 </script>
