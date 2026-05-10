@@ -64,19 +64,39 @@ class WallController extends Controller
                 ];
             });
 
-        $creators = User::where('id', '!=', $user?->id)
-            ->withCount('followers')
-            ->orderByDesc('followers_count')
-            ->limit(8)
+        // Real stories from followed users + own
+        $storyUsers = \App\Models\Story::with('user')
+            ->where('expires_at', '>', now())
+            ->where(function ($q) use ($user) {
+                $q->whereIn('user_id', function ($sub) use ($user) {
+                    $sub->select('following_id')
+                        ->from('follows')
+                        ->where('follower_id', $user?->id);
+                })->orWhere('user_id', $user?->id);
+            })
+            ->latest()
             ->get()
-            ->map(fn ($c) => [
-                'id' => $c->id,
-                'name' => $c->name,
-                'avatar' => $c->avatar,
+            ->groupBy('user_id')
+            ->map(fn ($group) => [
+                'id' => $group->first()->user->id,
+                'name' => $group->first()->user->name,
+                'username' => $group->first()->user->username,
+                'avatar' => $group->first()->user->avatar,
                 'hasStory' => true,
-                'isVIP' => $c->is_vip,
+                'isVIP' => $group->first()->user->is_vip,
                 'isLive' => false,
-            ]);
+                'stories' => $group->map(fn ($s) => [
+                    'id' => $s->id,
+                    'media_url' => $s->media_url,
+                    'type' => $s->type,
+                    'caption' => $s->caption,
+                    'is_locked' => $s->is_locked,
+                    'expires_at' => $s->expires_at->toISOString(),
+                    'created_at' => $s->created_at->toISOString(),
+                ])->values(),
+            ])->values();
+
+        $creators = $storyUsers;
 
         $topCreators = User::where('id', '!=', $user?->id)
             ->withCount('followers')

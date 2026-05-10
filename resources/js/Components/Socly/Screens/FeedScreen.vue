@@ -3,6 +3,8 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { usePage, router } from '@inertiajs/vue3'
 import { Play, Plus, Crown, Flame, Clock, ImageOff, Bell } from 'lucide-vue-next'
 import FeedCard from './FeedCard.vue'
+import StoryViewer from '@/Components/Socly/StoryViewer.vue'
+import CreateStoryModal from '@/Components/Socly/CreateStoryModal.vue'
 import axios from 'axios'
 import { usePullToRefresh } from '@/composables/usePullToRefresh'
 
@@ -15,16 +17,44 @@ const props = defineProps({
 const page = usePage()
 const authUser = computed(() => page.props.auth?.user)
 
+const showStoryViewer = ref(false)
+const storyGroupIndex = ref(0)
+const showCreateStory = ref(false)
+
 const storiesWithOwn = computed(() => {
+  const ownStories = props.stories.find(s => s.id === authUser.value?.id)
   const own = {
     id: 0,
     name: 'Vaše story',
     avatar: authUser.value?.avatar || '/images/default-avatar.svg',
-    hasStory: false,
+    hasStory: !!ownStories,
     isOwn: true,
+    stories: ownStories?.stories || [],
   }
-  return [own, ...props.stories]
+  return [own, ...props.stories.filter(s => s.id !== authUser.value?.id)]
 })
+
+const storyGroupsForViewer = computed(() => {
+  return storiesWithOwn.value.filter(s => s.stories?.length > 0)
+})
+
+const handleStoryClick = (story, index) => {
+  if (story.isOwn && !story.hasStory) {
+    showCreateStory.value = true
+    return
+  }
+  if (!story.stories?.length) return
+  const viewerGroups = storyGroupsForViewer.value
+  const gIdx = viewerGroups.findIndex(g => g.id === story.id)
+  if (gIdx === -1) return
+  storyGroupIndex.value = gIdx
+  showStoryViewer.value = true
+}
+
+const handleStoryCreated = () => {
+  showCreateStory.value = false
+  router.reload({ only: ['stories'], preserveScroll: true })
+}
 
 const feedContainer = ref(null)
 const { isPulling, isRefreshing, pullDistance } = usePullToRefresh(feedContainer)
@@ -135,7 +165,7 @@ onUnmounted(() => {
         <button 
           v-for="story in storiesWithOwn" 
           :key="story.id" 
-          @click="handleStoryClick"
+          @click="handleStoryClick(story, storiesWithOwn.indexOf(story))"
           class="flex flex-col items-center gap-2 flex-shrink-0 transition-transform active:scale-95"
         >
           <div class="relative">
@@ -211,13 +241,20 @@ onUnmounted(() => {
       </div>
     </div>
     
-    <!-- Story Coming Soon Toast -->
-    <Transition name="slide-up">
-      <div v-if="showStoryToast" class="fixed bottom-24 lg:bottom-10 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full bg-card/90 backdrop-blur-md border border-border/50 shadow-xl z-50 flex items-center gap-3">
-        <Crown class="w-5 h-5 text-gold" />
-        <p class="text-sm font-medium">Stories budou dostupné brzy!</p>
-      </div>
-    </Transition>
+    <!-- Story Viewer -->
+    <StoryViewer
+      :visible="showStoryViewer"
+      :story-groups="storyGroupsForViewer"
+      :initial-group-index="storyGroupIndex"
+      @close="showStoryViewer = false"
+    />
+
+    <!-- Create Story Modal -->
+    <CreateStoryModal
+      :visible="showCreateStory"
+      @close="showCreateStory = false"
+      @created="handleStoryCreated"
+    />
   </div>
 </template>
 

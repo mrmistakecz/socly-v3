@@ -468,7 +468,7 @@ const closeShareMenu = (e) => {
             <div class="flex items-center gap-4">
               <button @click="likePost(selectedPost)" class="flex items-center gap-1.5 text-sm transition-colors" :class="selectedPost.liked ? 'text-red-500' : 'text-muted-foreground hover:text-foreground'">
                 <Heart :class="['w-5 h-5 transition-transform', selectedPost.liked ? 'fill-red-500 scale-110' : '']" />
-                <span class="font-medium">{{ selectedPost.likes }}K</span>
+                <span class="font-medium">{{ selectedPost.likes }}</span>
               </button>
               <button class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
                 <MessageCircle class="w-5 h-5" />
