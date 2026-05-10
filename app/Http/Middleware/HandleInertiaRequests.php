@@ -52,6 +52,7 @@ class HandleInertiaRequests extends Middleware
                         'is_creator'         => $user->is_creator,
                         'subscription_price' => $user->subscription_price,
                         'is_admin'           => $user->is_admin,
+                        'cover_image'           => $user->cover_image ?: '/images/default-cover.svg',
                         'balance'               => (float) $user->balance,
                         'onboarding_completed'  => (bool) $user->onboarding_completed,
                         'followers_count'       => $user->followers_count,

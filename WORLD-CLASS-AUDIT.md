@@ -1,75 +1,137 @@
-# SOCLY v3 — Stav projektu
+# SOCLY v3 — Kompletní Audit
 
 > Poslední aktualizace: 10. 5. 2026
 
 ---
 
-## ✅ Implementováno
+## 🔴 KRITICKÉ BUGY (nefunkční funkce)
 
-### Bezpečnost
-- ✅ CSP — odstraněn `unsafe-eval` ze `SecurityHeaders.php`
-- ✅ Brute-force login — `RateLimiter::for('login')` s klíčem `email|ip`
-- ✅ Admin deleteUser — dynamický disk (public/R2) + `forceDelete()`
+### B1. MessageController — chybí `use Storage`
+- **Soubor:** `app/Http/Controllers/MessageController.php`
+- **Problém:** Třída používá `Storage::disk()` na řádku 83 a 87, ale nemá import `use Illuminate\Support\Facades\Storage;`
+- **Dopad:** Upload souborů ve zprávách **CRASHNE** s fatal error
+- **Fix:** Přidat import
 
-### Backend
-- ✅ Změna hesla — `PUT /settings/password` + formulář v `Settings.vue`
-- ✅ Změna emailu — `PUT /settings/email` + migrace `pending_email`
-- ✅ GDPR export — `GET /settings/export` (ZIP s profil, posty, zprávy)
-- ✅ Tipy — `POST /users/{user}/tip` s 80/20 split + notifikace
-- ✅ Story views — `story_views` tabulka + `POST /stories/{story}/view`
-- ✅ Cron: `subscriptions:expire`, `stories:cleanup`, `posts:sync-counts`
-- ✅ Queue async — `ShouldBroadcast` (kromě NewMessage)
+### B2. Home route `/` nemá `verified` middleware
+- **Soubor:** `routes/web.php` řádek 25
+- **Problém:** `Route::get('/', ...)->middleware('auth')` — chybí `verified`
+- **Dopad:** Neověření uživatelé se dostanou na feed místo přesměrování na `/email/verify`
+- **Fix:** Změnit na `->middleware(['auth', 'verified'])`
 
-### API integrace (hotovo 10. 5. 2026)
-- ✅ **Resend** — mail driver, domain verified, forgot password + email verification funguje
-- ✅ **Cloudflare R2** — všechny uploady (avatary, posty, stories, zprávy) na S3/R2 disku
-- ✅ **OpenAI Moderation** — `ModerationService` kontroluje posty + komentáře (fail-open)
-- ✅ **LiveKit** — `LiveStreamController` JWT token, room listing, `LiveStream.vue` + `useLiveStream.js`
-- ✅ **Stories** — reálná data z DB, `StoryViewer.vue`, `CreateStoryModal.vue`, progress bars, autoplay
-- ✅ **Forgot password** — `Password::sendResetLink()` přes Resend, ForgotPassword + ResetPassword Vue stránky
+### B3. User model — `cover_image` není v `$fillable`
+- **Soubor:** `app/Models/User.php`
+- **Problém:** `ProfileController::update` ukládá `cover_image` přes `$user->update($validated)`, ale pole není ve fillable
+- **Dopad:** Cover image se **NIKDY neuloží** do DB
+- **Fix:** Přidat `'cover_image'` do `$fillable`
 
-### Logické chyby (opraveno)
-- ✅ WallController N+1 konverzace — single SQL s JOIN + subquery
-- ✅ ProfileController likes — `(int)` místo `K` formátu
-- ✅ Profile modal likes — odstraněn hardcoded `K` suffix
-- ✅ PostInteraction — per-post channel `post.{id}`
-- ✅ Whisper typing — server-side broadcasting
-- ✅ FeedScreen stories — reálná data místo fake `$creators`
+### B4. `postsApi` — ambiguous column `likes_count` (trending sort)
+- **Soubor:** `app/Http/Controllers/WallController.php` řádek 191
+- **Problém:** Query používá `.withCount(['likes'])` což vytvoří alias `likes_count`, ale tabulka `posts` má **také sloupec** `likes_count`. Při `orderByDesc('likes_count')` PostgreSQL vrací error 42702.
+- **Dopad:** Feed s trending řazením **CRASHNE**
+- **Fix:** Použít `orderByDesc('posts.likes_count')` nebo odstranit withCount pro likes
 
-### Frontend
-- ✅ Infinite scroll (IntersectionObserver)
-- ✅ Pull-to-refresh — `usePullToRefresh` composable
-- ✅ Image lazy loading — `loading="lazy"`
-- ✅ Video přehrávač v modalu
-- ✅ Swipe gesta pro tab switching
-- ✅ a11y — `aria-label`, `role="dialog"`, `aria-modal`
-- ✅ EmptyState + ConfirmModal komponenty
-- ✅ `useAction` composable
-- ✅ StoryViewer — fullscreen, progress bars, tap navigation, autoplay, captions
-- ✅ CreateStoryModal — upload, preview, caption, locked toggle
-- ✅ LiveStream.vue — camera/mic controls, viewer count
-- ✅ Settings.vue — profil, zabezpečení, notifikace, soukromí, vzhled, GDPR export
+### B5. StoryController::index — `orWhere` scope leak
+- **Soubor:** `app/Http/Controllers/StoryController.php` řádek 26
+- **Problém:** `->orWhere('user_id', $user->id)` je na top-level query, takže bypass `active()` scope — vlastní expirované stories se stále zobrazí
+- **Dopad:** Uživatel vidí své stories i po expiraci (24h bypass)
+- **Fix:** Zabalit do nested where
 
-### Databáze
-- ✅ Performance indexy — messages, posts, likes, follows, subscriptions
+### B6. `is_banned` není v User `$casts`
+- **Soubor:** `app/Models/User.php`
+- **Problém:** Sloupec `is_banned` existuje v DB ale není v `$casts`
+- **Dopad:** Může vracet string `"0"` místo `false`
+- **Fix:** Přidat `'is_banned' => 'boolean'` do `$casts`
 
 ---
 
-## Zbývá (nice-to-have)
+## 🟡 UI/UX PROBLÉMY
 
-### Admin 2FA (TOTP)
-- Balíček: `composer require pragmarx/google2fa-laravel`
-- Přidat `google2fa_secret` sloupec, middleware `Verify2FA`, Vue stránku.
+### U1. Settings — `cover_image` v shared Inertia data chybí
+- **Soubor:** `app/Http/Middleware/HandleInertiaRequests.php`
+- **Problém:** Settings.vue čte `user.cover_image` ale HandleInertiaRequests to nepředává
+- **Dopad:** Cover preview v nastavení je vždy `undefined`
+- **Fix:** Přidat `'cover_image'` do shared auth user data
 
-### i18n
-- `npm install vue-i18n`, `locales/cs.json`, `createI18n()` v `app.js`
+### U2. Sitemap generuje `/@username` ale route neexistuje
+- **Soubor:** `routes/web.php` řádek 155
+- **Problém:** Sitemap odkazuje na `https://socly.eu/@username` — taková route neexistuje (profily jsou na `/profile/{id}`)
+- **Dopad:** Google indexuje mrtvé linky (404)
+- **Fix:** Přidat route `/@{username}` nebo změnit sitemap na `/profile/{id}`
 
-### CDN subdoména
-- `cdn.socly.eu` → R2 custom domain pro média
+### U3. Wallet.vue — `balance` reaktivita
+- **Problém:** `balance` je `ref(props.balance)` — při Inertia navigaci zpět se nereaktivuje
+- **Dopad:** Po návratu na wallet stránku se může zobrazit starý zůstatek
+- **Fix:** Použít `computed` nebo `watch` na props
+
+### U4. Žádný veřejný profil pro nepřihlášené
+- **Problém:** `/profile/{id}` vyžaduje auth+verified — sdílené linky nefungují
+- **Dopad:** Sdílení profilu na sociální sítě vede na login stránku
+
+### U5. Registrace — opraveno (10.5.)
+- ✅ `onError` přepne na step 1 kde se zobrazí validační chyby
+- ✅ Hesla se resetují jen při chybě
 
 ---
 
-## Infrastruktura (VPS)
+## 🟢 FUNKČNÍ (ověřeno)
+
+- ✅ **Email verifikace** — Registered event, verified middleware, VerifyEmail page
+- ✅ **Case-insensitive unique** email+username (normalize to lowercase)
+- ✅ **Admin panel** — search, reporty, ban/unban, revenue stats, flash messages
+- ✅ **Password reset** přes Resend
+- ✅ **Stories** — vytvoření, zobrazení, 24h expirace, VIP/locked
+- ✅ **OpenAI moderation** — posty, komentáře
+- ✅ **LiveKit streaming** — token generation, room listing
+- ✅ **R2 Storage** — posty, avatary, covers, stories
+- ✅ **Wallet** — crypto deposit (NOWPayments), withdraw, tip, unlock
+- ✅ **Messages** — text, media, voice, reactions, edit/delete, read receipts
+- ✅ **Follow/Subscribe** — toggle, auto-follow on subscribe
+- ✅ **Like/Comment/Bookmark** — real-time broadcast
+- ✅ **Notifications** — DB + WebSocket broadcast
+- ✅ **Block/Report** — users & posts, follow cleanup
+- ✅ **Account deletion** — soft-delete + anonymize (GDPR)
+- ✅ **Data export** — ZIP (profil, posty, zprávy)
+- ✅ **Security headers** — CSP, HSTS, X-Frame-Options
+- ✅ **Login ban check** — zabanovaní se nepřihlásí
+- ✅ **Button UI system** — btn-premium, btn-cta, btn-ghost, btn-danger, btn-icon
+- ✅ **Legal pages** — Terms, Privacy, Content Policy
+- ✅ **Sitemap** — dynamic XML (ale s nesprávnými URL — viz U2)
+- ✅ **Search** — ilike, SQL injection safe
+- ✅ **Settings** — heslo, email, profil, notifikace, vzhled
+
+---
+
+## 📋 GLOBÁLNÍ OPRAVY (7 fixů)
+
+| # | Oprava | Soubor | Priorita |
+|---|--------|--------|----------|
+| 1 | Přidat `use Storage` import | `MessageController.php` | KRITICKÁ |
+| 2 | Přidat `cover_image` do `$fillable` | `User.php` | KRITICKÁ |
+| 3 | Přidat `is_banned` do `$casts` | `User.php` | VYSOKÁ |
+| 4 | Home route — přidat `verified` middleware | `web.php` | VYSOKÁ |
+| 5 | Trending feed — opravit ambiguous `likes_count` | `WallController.php` | VYSOKÁ |
+| 6 | Story index — opravit `orWhere` scope leak | `StoryController.php` | STŘEDNÍ |
+| 7 | Shared data — přidat `cover_image` | `HandleInertiaRequests.php` | STŘEDNÍ |
+
+---
+
+## 🔵 CHYBĚJÍCÍ FUNKCE (TODO)
+
+| # | Funkce | Priorita |
+|---|--------|----------|
+| F1 | Subscription auto-renewal (cron) | VYSOKÁ |
+| F2 | Admin — schvalování výběrů (payout queue) | VYSOKÁ |
+| F3 | Push notifikace (service worker) | STŘEDNÍ |
+| F4 | PWA manifest + offline shell | STŘEDNÍ |
+| F5 | Creator analytics (earnings, views) | STŘEDNÍ |
+| F6 | Veřejné profily (bez auth) | STŘEDNÍ |
+| F7 | 2FA (TOTP) | NÍZKÁ |
+| F8 | Content watermarking | NÍZKÁ |
+| F9 | IP rate-limit + auto-ban | NÍZKÁ |
+
+---
+
+## 🏗 Infrastruktura (VPS)
 
 ### Redis (doporučeno)
 ```
@@ -90,14 +152,4 @@ certbot renew --dry-run
 
 ---
 
-## Testy (post-deploy)
-
-### PHPUnit feature testy
-- Registrace/login/logout, CRUD postů, follow, subscribe, like, zprávy, admin.
-
-### Playwright E2E testy
-- Registrační flow, vytvoření postu, profil → follow → zpráva.
-
----
-
-*Tento soubor obsahuje stav celého projektu.*
+*Tento soubor obsahuje kompletní audit SOCLY v3.*

@@ -34,6 +34,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'subscription_price',
         'date_of_birth',
         'terms_accepted_at',
+        'cover_image',
     ];
 
     /**
@@ -63,6 +64,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'last_seen_at' => 'datetime',
         'balance' => 'decimal:2',
         'onboarding_completed' => 'boolean',
+        'is_banned' => 'boolean',
     ];
 
     // --- Relationships ---

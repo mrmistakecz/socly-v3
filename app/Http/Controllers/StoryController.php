@@ -18,12 +18,13 @@ class StoryController extends Controller
 
         $stories = Story::with('user')
             ->active()
-            ->whereIn('user_id', function ($q) use ($user) {
-                $q->select('following_id')
-                  ->from('follows')
-                  ->where('follower_id', $user->id);
+            ->where(function ($query) use ($user) {
+                $query->whereIn('user_id', function ($q) use ($user) {
+                    $q->select('following_id')
+                      ->from('follows')
+                      ->where('follower_id', $user->id);
+                })->orWhere('user_id', $user->id);
             })
-            ->orWhere('user_id', $user->id)
             ->latest()
             ->get()
             ->groupBy('user_id')

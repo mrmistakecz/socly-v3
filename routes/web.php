@@ -22,7 +22,7 @@ use App\Http\Controllers\LiveStreamController;
 use Inertia\Inertia;
 
 // Main feed (requires auth)
-Route::get('/', [WallController::class, 'index'])->middleware('auth')->name('home');
+Route::get('/', [WallController::class, 'index'])->middleware(['auth', 'verified'])->name('home');
 
 // Auth routes
 Route::middleware('guest')->group(function () {

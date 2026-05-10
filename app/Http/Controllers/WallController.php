@@ -188,11 +188,11 @@ class WallController extends Controller
             ->withCount(['likes', 'comments']);
 
         if ($sort === 'trending') {
-            $postsQuery->orderByDesc('likes_count')->orderByDesc('id');
-            if ($lastId) $postsQuery->where('id', '<', $lastId);
+            $postsQuery->orderByDesc('posts.likes_count')->orderByDesc('posts.id');
+            if ($lastId) $postsQuery->where('posts.id', '<', $lastId);
         } else {
             $postsQuery->latest();
-            if ($lastId) $postsQuery->where('id', '<', $lastId);
+            if ($lastId) $postsQuery->where('posts.id', '<', $lastId);
         }
 
         $posts = $postsQuery->limit($limit + 1)->get();
